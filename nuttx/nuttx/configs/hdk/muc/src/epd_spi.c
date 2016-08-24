@@ -132,7 +132,7 @@ uint8_t SPI_send(FAR struct spi_dev_s *spi, const void *buffer, size_t length) {
     while (length-- > 0)
     {
         response = SPI_SEND(spi, *ptr++ & 0xffff);
-	up_mdelay(2);
+	    up_udelay(500);
     }
 	
 	//SPI_SELECT(spi, SPIDEV_NONE, false);
@@ -140,6 +140,35 @@ uint8_t SPI_send(FAR struct spi_dev_s *spi, const void *buffer, size_t length) {
 	return response;
 	//
 }
+
+
+// send a data block to SPI
+// will only change CS if the SPI_CS bits are set
+uint8_t SPI_send_image(FAR struct spi_dev_s *spi, const void *buffer, size_t length) {
+
+
+	//SPI_SELECT(spi, SPIDEV_NONE, false);
+	//up_mdelay(1);
+	//SPI_SELECT(spi, SPIDEV_NONE, true);
+
+	FAR const uint16_t *ptr = (FAR const uint16_t*)buffer;
+  	uint8_t response = 0;
+
+    /* Loop while there are bytes remaining to be sent */
+
+    while (length-- > 0)
+    {
+        response = SPI_SEND(spi, *ptr++ & 0xffff);
+	    up_udelay(200);
+    }
+	
+	//SPI_SELECT(spi, SPIDEV_NONE, false);
+	//SPI_SELECT(spi, SPIDEV_NONE, false);
+	return response;
+	//
+}
+
+
 
 // send a data block to SPI and return last bytes returned by slave
 // will only change CS if the SPI_CS bits are set

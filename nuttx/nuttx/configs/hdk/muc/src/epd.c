@@ -199,6 +199,7 @@ EPD_type *EPD_create(EPD_size size,
 		epd->channel_select = cs;
 		epd->channel_select_length = sizeof(cs);
 		epd->pre_border_byte = true;
+		epd->middle_scan = true;
 		epd->border_byte = EPD_BORDER_BYTE_NONE;
 		break;
 	}
@@ -649,7 +650,7 @@ void EPD_image_0(EPD_type *epd, const uint8_t *image) {
 	frame_fixed_repeat(epd, 0xaa, EPD_compensate);
 	frame_fixed_repeat(epd, 0xaa, EPD_white);
 	frame_data_repeat(epd, image, NULL, EPD_inverse);
-	frame_data_repeat(epd, image, NULL, EPD_normal);
+    //frame_data_repeat(epd, image, NULL, EPD_normal);
 }
 
 // change from old image to new image
@@ -657,14 +658,14 @@ void EPD_image(EPD_type *epd, const uint8_t *old_image, const uint8_t *new_image
 	frame_data_repeat(epd, old_image, NULL, EPD_compensate);
 	frame_data_repeat(epd, old_image, NULL, EPD_white);
 	frame_data_repeat(epd, new_image, NULL, EPD_inverse);
-	frame_data_repeat(epd, new_image, NULL, EPD_normal);
+	//frame_data_repeat(epd, new_image, NULL, EPD_normal);
 }
 
 // change from old image to new image
 void EPD_partial_image(EPD_type *epd, const uint8_t *old_image, const uint8_t *new_image) {
 	// Only need last stage for partial update
 	// See discussion on issue #19 in the repaper/gratis repository on github
-	frame_data_repeat(epd, new_image, old_image, EPD_normal);
+	frame_data_repeat(epd, new_image, old_image, EPD_inverse);
 }
 
 
@@ -904,6 +905,11 @@ static void all_pixels(EPD_type *epd, uint8_t **pp, const uint8_t *data, uint8_t
 static void one_line(EPD_type *epd, uint16_t line, const uint8_t *data, uint8_t fixed_value, const uint8_t *mask, EPD_stage stage) {
 
 	//SPI_on(epd->spi);
+	//SPI_SELECT(epd->spi, SPIDEV_NONE, false);
+	//up_mdelay(1);
+	//SPI_SELECT(epd->spi, SPIDEV_NONE, true);
+	// send byte date
+    //SPI_send_image(epd->spi, CU8(0x00, 0x00), 1);
 
 	// send data
 	SPI_send(epd->spi, CU8(0x70, 0x0a), 1);
@@ -983,10 +989,31 @@ static void one_line(EPD_type *epd, uint16_t line, const uint8_t *data, uint8_t 
 	// send the accumulated line buffer
 	SPI_send(epd->spi, epd->line_buffer, (p - epd->line_buffer)/2);
 
+	//Delay_ms(10);
+
+	//SPI_SELECT(epd->spi, SPIDEV_NONE, false);
+
 	// output data to panel
+	//Delay_ms(10);
+
+	//SPI_SELECT(epd->spi, SPIDEV_NONE, false);
+	//up_mdelay(1);
+	//
+	//SPI_SELECT(epd->spi, SPIDEV_NONE, true);	
+	
 	SPI_send(epd->spi, CU8(0x70, 0x02), 1);
 	SPI_send(epd->spi, CU8(0x72, 0x07), 1);
 
-	//Delay_ms(1);
+	//Delay_ms(10);
+
+		// send byte date
+	//SPI_SELECT(epd->spi, SPIDEV_NONE, false);
+	//up_mdelay(1);
+	//SPI_SELECT(epd->spi, SPIDEV_NONE, true);
+    //SPI_send_image(epd->spi, CU8(0x00, 0x00), 1);
+
+	//SPI_SELECT(epd->spi, SPIDEV_NONE, false);
+		
 	//SPI_off(epd->spi);	
+	
 }
