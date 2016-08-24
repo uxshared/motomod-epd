@@ -25,6 +25,9 @@
 
 #include <arch/board/epd_spi.h>
 
+#include <nuttx/arch.h>
+
+
 
 #define EPD_COG_VERSION 2
 
@@ -96,7 +99,8 @@ void SPI_off(FAR struct spi_dev_s *spi) {
 
 // send a data block to SPI
 // will only change CS if the SPI_CS bits are set
-void SPI_send(FAR struct spi_dev_s *spi, const void *buffer, size_t length) {
+uint8_t SPI_send(FAR struct spi_dev_s *spi, const void *buffer, size_t length) {
+
 	/*struct spi_ioc_transfer transfer_buffer[1] = {
 		{
 			.tx_buf = (unsigned long)(buffer),
@@ -114,9 +118,27 @@ void SPI_send(FAR struct spi_dev_s *spi, const void *buffer, size_t length) {
 	}*/
 	//SPI_SELECT(spi, SPIDEV_NONE, true);
 
-	SPI_SNDBLOCK(spi, buffer, length);
+	//SPI_SNDBLOCK(spi, buffer, length);
+
+	SPI_SELECT(spi, SPIDEV_NONE, false);
+	up_mdelay(1);
+	SPI_SELECT(spi, SPIDEV_NONE, true);
+
+	FAR const uint16_t *ptr = (FAR const uint16_t*)buffer;
+  	uint8_t response = 0;
+
+    /* Loop while there are bytes remaining to be sent */
+
+    while (length-- > 0)
+    {
+        response = SPI_SEND(spi, *ptr++ & 0xffff);
+	up_mdelay(2);
+    }
 	
 	//SPI_SELECT(spi, SPIDEV_NONE, false);
+	SPI_SELECT(spi, SPIDEV_NONE, false);
+	return response;
+	//
 }
 
 // send a data block to SPI and return last bytes returned by slave
@@ -159,9 +181,9 @@ static void set_spi_mode(FAR struct spi_dev_s *spi, uint8_t in_mode) {
 
         
 
-	SPI_SETMODE(spi,in_mode);
-	SPI_SETBITS(spi,8);
-	SPI_SETFREQUENCY(spi,EPD_SPI_BPS);
+	//SPI_SETMODE(spi,in_mode);
+	//SPI_SETBITS(spi,8);
+	//SPI_SETFREQUENCY(spi,EPD_SPI_BPS);
 
         //dbg("mode: %d freq: %d\n", in_mode, freq);
 

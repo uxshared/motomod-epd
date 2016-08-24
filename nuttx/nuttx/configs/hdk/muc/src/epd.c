@@ -25,6 +25,9 @@
 
 #include <string.h>
 
+#include <nuttx/arch.h>
+
+
 //#include "spi.h"
 
 #include <nuttx/gpio.h>
@@ -35,8 +38,8 @@
 
 
 // delays - more consistent naming
-#define Delay_ms(ms) usleep(1000 * (ms))
-#define Delay_us(us) usleep(us)
+#define Delay_ms(ms) up_mdelay(ms)
+#define Delay_us(us) up_udelay(us)
 #define LOW 0
 #define HIGH 1
 #define digitalRead(pin) gpio_get_value(pin)
@@ -307,6 +310,8 @@ void EPD_begin(EPD_type *epd) {
 
 	SPI_on(epd->spi);
 
+	uint8_t receive_buffer[2];
+
 	Delay_ms(5);
 	gpio_set_value(epd->EPD_Pin_PANEL_ON, HIGH);
 	Delay_ms(10);
@@ -322,67 +327,128 @@ void EPD_begin(EPD_type *epd) {
 	Delay_ms(5);
 
 
+
+
 	// wait for COG to become ready
 	while (HIGH == gpio_get_value(epd->EPD_Pin_BUSY)) {
 		Delay_us(10);
 	}
 
+	// add more delay for busy pin
+	Delay_ms(100);
+
+
+
+
+
+
+
 	// read the COG ID
-	uint8_t receive_buffer[2];
+	
 	int cog_id = receive_buffer[1];
 	// int cog_id = -1;
-	//SPI_SELECT(epd->spi, SPIDEV_NONE, true);
+	SPI_SELECT(epd->spi, SPIDEV_NONE, false);
+	Delay_ms(1);
+	SPI_SELECT(epd->spi, SPIDEV_NONE, true);
+/*	
 	cog_id = SPI_SEND(epd->spi, 0x71 & 0xff);
 	cog_id = SPI_SEND(epd->spi, 0x00 & 0xff);
 	cog_id = SPI_SEND(epd->spi, 0x71 & 0xff);
 	cog_id = SPI_SEND(epd->spi, 0x00 & 0xff);
-	dbg ("COG ID - 00 %d... %d\n", cog_id,  0x0f & cog_id);
-	//SPI_SELECT(epd->spi, SPIDEV_NONE, false);
-
-	dbg("Enter loop!\n");
-    while(1) {
-        usleep(20000);
-	}
-	dbg("Exit loop!\n");
-
-/*
+	*/
+	cog_id = SPI_send(epd->spi, CU8(0x71, 0x00), 1);
+	cog_id = SPI_send(epd->spi, CU8(0x71, 0x00), 1);
 	
-	SPI_read(epd->spi, CU8(0x71, 0x00), receive_buffer, sizeof(receive_buffer));
-	SPI_read(epd->spi, CU8(0x71, 0x00), receive_buffer, sizeof(receive_buffer));
-	int cog_id = receive_buffer[1];
-*/	
+	dbg ("COG ID - 01 %d... %d\n", cog_id,  0x0f & cog_id);
+	
+
+	SPI_SELECT(epd->spi, SPIDEV_NONE, false);
+
+
+
+
+
+	
+	//SPI_read(epd->spi, CU8(0x71, 0x00), receive_buffer, sizeof(receive_buffer));
+	//SPI_read(epd->spi, CU8(0x71, 0x00), receive_buffer, sizeof(receive_buffer));
+	//cog_id = receive_buffer[1];
+	
     //dbg ("COG ID!!!!!!!!!!!!!! %d...%d\n", cog_id, 0x0f & cog_id);
-	/*if (0x02 != (0x0f & cog_id)) {
+    /*
+	if (0x02 != (0x0f & cog_id)) {
 		epd->status = EPD_UNSUPPORTED_COG;
 		power_off(epd);
+		dbg ("EXIT!!! COG ID!!!!!!!!!!!!!! %d...%d\n", cog_id, 0x0f & cog_id);
 		return;
 	}*/
 
 
 
+	
+		
+
+
+
 	// Disable OE
-    //SPI_send(epd->spi, CU8(0x70, 0x02), 2);
-	//SPI_send(epd->spi, CU8(0x72, 0x40), 2);
+
+	SPI_SELECT(epd->spi, SPIDEV_NONE, false);
+	Delay_ms(1);
 	SPI_SELECT(epd->spi, SPIDEV_NONE, true);
+	
+    SPI_send(epd->spi, CU8(0x70, 0x02), 1);
+	
+    SPI_SELECT(epd->spi, SPIDEV_NONE, false);
+	Delay_ms(1);
+	SPI_SELECT(epd->spi, SPIDEV_NONE, true);
+
+	
+	SPI_send(epd->spi, CU8(0x72, 0x40), 1);
+
+	SPI_SELECT(epd->spi, SPIDEV_NONE, false);
+
+	
+//	SPI_SELECT(epd->spi, SPIDEV_NONE, true);
+/*
 	SPI_SEND(epd->spi, 0x70 & 0xff);
 	SPI_SEND(epd->spi, 0x02 & 0xff);
 	SPI_SEND(epd->spi, 0x72 & 0xff);
 	SPI_SEND(epd->spi, 0x40 & 0xff);
-	SPI_SELECT(epd->spi, SPIDEV_NONE, false);
+	*/
+//	SPI_SELECT(epd->spi, SPIDEV_NONE, false);
 	
 
 	// check breakage
-	//SPI_send(epd->spi, CU8(0x70, 0x0f), 2);
-	//SPI_read(epd->spi, CU8(0x73, 0x00), receive_buffer, sizeof(receive_buffer));
-	SPI_SELECT(epd->spi, SPIDEV_NONE, true);
-	int broken_panel = receive_buffer[1];
-    SPI_SEND(epd->spi, 0x70 & 0xff);
-	SPI_SEND(epd->spi, 0x0f & 0xff);	
-    broken_panel = SPI_SEND(epd->spi, 0x73 & 0xff);	
-    //dbg ("broken_panel!!!!!!!!!!!!!! %d...%d\n", broken_panel, 0x80 & broken_panel);
-	broken_panel = SPI_SEND(epd->spi, 0x00 & 0xff);			
-	dbg ("broken_panel!!!!!!!!!!!!!! %d...%d\n", broken_panel, 0x80 & broken_panel);
+
+	Delay_ms(20);
 	SPI_SELECT(epd->spi, SPIDEV_NONE, false);
+	Delay_ms(1);
+	SPI_SELECT(epd->spi, SPIDEV_NONE, true);
+
+
+	SPI_send(epd->spi, CU8(0x70, 0x0f), 1);
+	
+	SPI_SELECT(epd->spi, SPIDEV_NONE, false);
+	Delay_ms(1);
+	SPI_SELECT(epd->spi, SPIDEV_NONE, true);
+
+	int broken_panel = receive_buffer[1];
+	broken_panel = SPI_send(epd->spi, CU8(0x73, 0x00), 1);	
+
+	dbg ("broken_panel!!!!!!!!!!!!!! %d...%d\n", broken_panel, 0x80 & broken_panel);
+
+	SPI_SELECT(epd->spi, SPIDEV_NONE, false);
+	
+//	SPI_SELECT(epd->spi, SPIDEV_NONE, true);
+//	int broken_panel = receive_buffer[1];
+    /*SPI_SEND(epd->spi, 0x70 & 0xff);
+	SPI_SEND(epd->spi, 0x0f & 0xff);	*/
+    //broken_panel = SPI_SEND(epd->spi, 0x73 & 0xff);	
+    //dbg ("broken_panel!!!!!!!!!!!!!! %d...%d\n", broken_panel, 0x80 & broken_panel);
+//	broken_panel = SPI_send(epd->spi, CU8(0x73, 0x00), 2);		
+//	dbg ("broken_panel!!!!!!!!!!!!!! %d...%d\n", broken_panel, 0x80 & broken_panel);
+//	SPI_SELECT(epd->spi, SPIDEV_NONE, false);
+		
+
 
 
 
@@ -393,37 +459,42 @@ void EPD_begin(EPD_type *epd) {
 		return;
 	}
 */
+
+	SPI_SELECT(epd->spi, SPIDEV_NONE, false);
+	Delay_ms(1);
+	SPI_SELECT(epd->spi, SPIDEV_NONE, true);
+
 	// power saving mode
-	SPI_send(epd->spi, CU8(0x70, 0x0b), 2);
-	SPI_send(epd->spi, CU8(0x72, 0x02), 2);
+	SPI_send(epd->spi, CU8(0x70, 0x0b), 1);
+	SPI_send(epd->spi, CU8(0x72, 0x02), 1);
 
 	// channel select
-	SPI_send(epd->spi, CU8(0x70, 0x01), 2);
+	SPI_send(epd->spi, CU8(0x70, 0x01), 1);
 	SPI_send(epd->spi, epd->channel_select, epd->channel_select_length);
 
 	// high power mode osc
-	SPI_send(epd->spi, CU8(0x70, 0x07), 2);
-	SPI_send(epd->spi, CU8(0x72, 0xd1), 2);
+	SPI_send(epd->spi, CU8(0x70, 0x07), 1);
+	SPI_send(epd->spi, CU8(0x72, 0xd1), 1);
 
 	// power setting
-	SPI_send(epd->spi, CU8(0x70, 0x08), 2);
-	SPI_send(epd->spi, CU8(0x72, 0x02), 2);
+	SPI_send(epd->spi, CU8(0x70, 0x08), 1);
+	SPI_send(epd->spi, CU8(0x72, 0x02), 1);
 
 	// Vcom level
-	SPI_send(epd->spi, CU8(0x70, 0x09), 2);
-	SPI_send(epd->spi, CU8(0x72, 0xc2), 2);
+	SPI_send(epd->spi, CU8(0x70, 0x09), 1);
+	SPI_send(epd->spi, CU8(0x72, 0xc2), 1);
 
 	// power setting
-	SPI_send(epd->spi, CU8(0x70, 0x04), 2);
-	SPI_send(epd->spi, CU8(0x72, 0x03), 2);
+	SPI_send(epd->spi, CU8(0x70, 0x04), 1);
+	SPI_send(epd->spi, CU8(0x72, 0x03), 1);
 
 	// driver latch on
-	SPI_send(epd->spi, CU8(0x70, 0x03), 2);
-	SPI_send(epd->spi, CU8(0x72, 0x01), 2);
+	SPI_send(epd->spi, CU8(0x70, 0x03), 1);
+	SPI_send(epd->spi, CU8(0x72, 0x01), 1);
 
 	// driver latch off
-	SPI_send(epd->spi, CU8(0x70, 0x03), 2);
-	SPI_send(epd->spi, CU8(0x72, 0x00), 2);
+	SPI_send(epd->spi, CU8(0x70, 0x03), 1);
+	SPI_send(epd->spi, CU8(0x72, 0x00), 1);
 
 	Delay_ms(5);
 
@@ -432,32 +503,29 @@ void EPD_begin(EPD_type *epd) {
     int i;
 	for (i = 0; i < 4; ++i) {
 		// charge pump positive voltage on - VGH/VDL on
-		SPI_send(epd->spi, CU8(0x70, 0x05), 2);
-		SPI_send(epd->spi, CU8(0x72, 0x01), 2);
+		SPI_send(epd->spi, CU8(0x70, 0x05), 1);
+		SPI_send(epd->spi, CU8(0x72, 0x01), 1);
 
 		Delay_ms(240);
 
 		// charge pump negative voltage on - VGL/VDL on
-		SPI_send(epd->spi, CU8(0x70, 0x05), 2);
-		SPI_send(epd->spi, CU8(0x72, 0x03), 2);
+		SPI_send(epd->spi, CU8(0x70, 0x05), 1);
+		SPI_send(epd->spi, CU8(0x72, 0x03), 1);
 
 		Delay_ms(40);
 
 		// charge pump Vcom on - Vcom driver on
-		SPI_send(epd->spi, CU8(0x70, 0x05), 2);
-		SPI_send(epd->spi, CU8(0x72, 0x0f), 2);
+		SPI_send(epd->spi, CU8(0x70, 0x05), 1);
+		SPI_send(epd->spi, CU8(0x72, 0x0f), 1);
 
 		Delay_ms(40);
 
 		// check DC/DC
-		SPI_send(epd->spi, CU8(0x70, 0x0f), 2);
+		SPI_send(epd->spi, CU8(0x70, 0x0f), 1);
 		int dc_state = receive_buffer[1];
-		SPI_SELECT(epd->spi, SPIDEV_NONE, true);
-        dc_state = SPI_SEND(epd->spi, 0x73 & 0xff);	
-		dc_state = SPI_SEND(epd->spi, 0x00 & 0xff);		
+		dc_state = SPI_send(epd->spi,CU8(0x73, 0x00), 1);		
 		dbg("DC STATE %d\n", 0x40 & dc_state);
-		SPI_SELECT(epd->spi, SPIDEV_NONE, false);
-		//SPI_read(epd->spi, CU8(0x73, 0x00), receive_buffer, sizeof(receive_buffer));		
+		
 		if (0x40 == (0x40 & dc_state)) {
 			dc_ok = true;
 			break;
@@ -471,10 +539,25 @@ void EPD_begin(EPD_type *epd) {
 	}
 
 	// output enable to disable
-	SPI_send(epd->spi, CU8(0x70, 0x02), 2);
-	SPI_send(epd->spi, CU8(0x72, 0x04), 2);
+	SPI_send(epd->spi, CU8(0x70, 0x02), 1);
+	SPI_send(epd->spi, CU8(0x72, 0x04), 1);
 
 	epd->COG_on = true;
+
+
+	SPI_SELECT(epd->spi, SPIDEV_NONE, false);
+
+
+
+
+	/*dbg("Enter loop!\n");
+while(1) {
+	usleep(20000);
+}
+dbg("Exit loop!\n");*/
+
+
+
 }
 
 
@@ -495,34 +578,34 @@ void EPD_end(EPD_type *epd) {
 	}
 
 	// ??? - not described in datasheet
-	SPI_send(epd->spi, CU8(0x70, 0x0b), 2);
-	SPI_send(epd->spi, CU8(0x72, 0x00), 2);
+	SPI_send(epd->spi, CU8(0x70, 0x0b), 1);
+	SPI_send(epd->spi, CU8(0x72, 0x00), 1);
 
 	// latch reset turn on
-	SPI_send(epd->spi, CU8(0x70, 0x03), 2);
-	SPI_send(epd->spi, CU8(0x72, 0x01), 2);
+	SPI_send(epd->spi, CU8(0x70, 0x03), 1);
+	SPI_send(epd->spi, CU8(0x72, 0x01), 1);
 
 	// power off charge pump Vcom
-	SPI_send(epd->spi, CU8(0x70, 0x05), 2);
-	SPI_send(epd->spi, CU8(0x72, 0x03), 2);
+	SPI_send(epd->spi, CU8(0x70, 0x05), 1);
+	SPI_send(epd->spi, CU8(0x72, 0x03), 1);
 
 	// power off charge pump neg voltage
-	SPI_send(epd->spi, CU8(0x70, 0x05), 2);
-	SPI_send(epd->spi, CU8(0x72, 0x01), 2);
+	SPI_send(epd->spi, CU8(0x70, 0x05), 1);
+	SPI_send(epd->spi, CU8(0x72, 0x01), 1);
 
 	Delay_ms(120);
 
 	// discharge internal
-	SPI_send(epd->spi, CU8(0x70, 0x04), 2);
-	SPI_send(epd->spi, CU8(0x72, 0x80), 2);
+	SPI_send(epd->spi, CU8(0x70, 0x04), 1);
+	SPI_send(epd->spi, CU8(0x72, 0x80), 1);
 
 	// turn off all charge pumps
-	SPI_send(epd->spi, CU8(0x70, 0x05), 2);
-	SPI_send(epd->spi, CU8(0x72, 0x00), 2);
+	SPI_send(epd->spi, CU8(0x70, 0x05), 1);
+	SPI_send(epd->spi, CU8(0x72, 0x00), 1);
 
 	// turn of osc
-	SPI_send(epd->spi, CU8(0x70, 0x07), 2);
-	SPI_send(epd->spi, CU8(0x72, 0x01), 2);
+	SPI_send(epd->spi, CU8(0x70, 0x07), 1);
+	SPI_send(epd->spi, CU8(0x72, 0x01), 1);
 
 	Delay_ms(50);
 
@@ -820,10 +903,10 @@ static void all_pixels(EPD_type *epd, uint8_t **pp, const uint8_t *data, uint8_t
 // output one line of scan and data bytes to the display
 static void one_line(EPD_type *epd, uint16_t line, const uint8_t *data, uint8_t fixed_value, const uint8_t *mask, EPD_stage stage) {
 
-	SPI_on(epd->spi);
+	//SPI_on(epd->spi);
 
 	// send data
-	SPI_send(epd->spi, CU8(0x70, 0x0a), 2);
+	SPI_send(epd->spi, CU8(0x70, 0x0a), 1);
 
 	// CS low
 	uint8_t *p = epd->line_buffer;
@@ -898,12 +981,12 @@ static void one_line(EPD_type *epd, uint16_t line, const uint8_t *data, uint8_t 
 		break;
 	}
 	// send the accumulated line buffer
-	SPI_send(epd->spi, epd->line_buffer, p - epd->line_buffer);
+	SPI_send(epd->spi, epd->line_buffer, (p - epd->line_buffer)/2);
 
 	// output data to panel
-	SPI_send(epd->spi, CU8(0x70, 0x02), 2);
-	SPI_send(epd->spi, CU8(0x72, 0x07), 2);
+	SPI_send(epd->spi, CU8(0x70, 0x02), 1);
+	SPI_send(epd->spi, CU8(0x72, 0x07), 1);
 
 	//Delay_ms(1);
-	SPI_off(epd->spi);	
+	//SPI_off(epd->spi);	
 }

@@ -47,7 +47,7 @@ void SPI_off(FAR struct spi_dev_s *spi);
 
 // send a data block to SPI
 // will only change CS if the SPI_CS bits are set
-void SPI_send(FAR struct spi_dev_s *spi, const void *buffer, size_t length);
+uint8_t SPI_send(FAR struct spi_dev_s *spi, const void *buffer, size_t length);
 
 // send a data block to SPI and return last bytes returned by slave
 // will only change CS if the SPI_CS bits are set

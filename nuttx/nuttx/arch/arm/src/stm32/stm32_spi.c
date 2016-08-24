@@ -1441,7 +1441,7 @@ static void spi_setbits(FAR struct spi_dev_s *dev, int nbits)
         case 8:
           setbits = 0;
 #if defined(CONFIG_STM32_STM32L4X6) || defined(CONFIG_STM32_STM32L4X3)
-          clrbits = SPI_CR1_CRCL|SPI_CR1_LSBFIRST;
+          clrbits = SPI_CR1_CRCL/*|SPI_CR1_LSBFIRST*/;
 #else
           clrbits = SPI_CR1_DFF|SPI_CR1_LSBFIRST;
 #endif
@@ -1469,6 +1469,8 @@ static void spi_setbits(FAR struct spi_dev_s *dev, int nbits)
           return;
         }
 
+
+      dbg("Set Bits: setbits %d, clrbits %d\n", setbits, clrbits);
       spi_modifycr1(priv, 0, SPI_CR1_SPE);
       spi_modifycr1(priv, setbits, clrbits);
       spi_modifycr1(priv, SPI_CR1_SPE, 0);
@@ -1512,8 +1514,9 @@ static uint16_t spi_send(FAR struct spi_dev_s *dev, uint16_t wd)
 
   regval = spi_getreg(priv, STM32_SPI_SR_OFFSET);
 
+  
   //spivdbg("Sent: %04x Return: %04x Status: %02x\n", wd, ret, regval);
-  dbg("Sent: %04x Return: %04x Status: %02x\n", wd, ret, regval);
+  //dbg("Sent: %04x Return: %04x Status: %02x\n", wd, ret, regval);
   UNUSED(regval);
 
   return ret;
@@ -2097,6 +2100,104 @@ static void spi_portinitialize(FAR struct stm32_spidev_s *priv)
   spi_modifycr1(priv, SPI_CR1_SPE, 0);
 }
 
+
+
+
+
+/************************************************************************************
+ * Name: spi_portinitialize
+ *
+ * Description:
+ *   Initialize the selected SPI port in its default state (Master, 8-bit, mode 0, etc.)
+ *
+ * Input Parameter:
+ *   priv   - private SPI device structure
+ *
+ * Returned Value:
+ *   None
+ *
+ ************************************************************************************/
+
+static void spi_portinitialize1(FAR struct stm32_spidev_s *priv)
+{
+  uint16_t setbits;
+  uint16_t clrbits;
+
+
+  
+      /* Configure CR1. Default configuration:
+       *   Mode 0:                        CPHA=0 and CPOL=0
+       *   Master:                        MSTR=1
+       *   8-bit:                         DFF=0
+       *   8-bit:                         CRCL=0
+       *   MSB tranmitted first:          LSBFIRST=0
+       *   Replace NSS with SSI & SSI=1:  SSI=1 SSM=1 (prevents MODF error)
+       *   Two lines full duplex:         BIDIMODE=0 BIDIOIE=(Don't care) and RXONLY=0
+       */
+      clrbits = SPI_CR1_CPHA|SPI_CR1_CPOL|SPI_CR1_BR_MASK|SPI_CR1_LSBFIRST|
+                SPI_CR1_RXONLY|SPI_CR1_CRCL|SPI_CR1_BIDIOE|SPI_CR1_BIDIMODE;
+
+      setbits = SPI_CR1_MSTR|SPI_CR1_SSI|SPI_CR1_SSM;
+   
+
+  dbg("port init setbits%d, clrbits%d\n", setbits, clrbits);
+  spi_modifycr1(priv, setbits, clrbits);
+
+
+  priv->frequency = 0;
+  priv->nbits     = 8;
+  priv->mode      = SPIDEV_MODE0;
+
+
+  /* Select a default frequency of approx. 400KHz */
+
+  if (priv->mode_type == SPI_MODE_TYPE_MASTER)
+    {
+      spi_setfrequency((FAR struct spi_dev_s *)priv, 400000);
+    }
+
+
+
+  /* Initialize the SPI semaphore that enforces mutually exclusive access */
+
+
+  sem_init(&priv->exclsem, 0, 1);
+
+
+  /* Initialize the SPI semaphores that is used to wait for DMA completion */
+
+#ifdef CONFIG_STM32_SPI_DMA
+  sem_init(&priv->rxsem, 0, 0);
+  sem_init(&priv->txsem, 0, 0);
+
+  /* Get DMA channels.  NOTE: stm32_dmachannel() will always assign the DMA channel.
+   * if the channel is not available, then stm32_dmachannel() will block and wait
+   * until the channel becomes available.  WARNING: If you have another device sharing
+   * a DMA channel with SPI and the code never releases that channel, then the call
+   * to stm32_dmachannel()  will hang forever in this function!  Don't let your
+   * design do that!
+   */
+
+  if (!priv->rxdma)
+      priv->rxdma = stm32_dmachannel(priv->rxch);
+  if (!priv->txdma)
+      priv->txdma = stm32_dmachannel(priv->txch);
+
+  DEBUGASSERT(priv->rxdma && priv->txdma);
+
+  spi_putreg(priv, STM32_SPI_CR2_OFFSET, SPI_CR2_RXDMAEN | SPI_CR2_TXDMAEN);
+#endif
+
+#ifdef SPI_CR2_FRXTH
+  spi_modifycr2(priv, SPI_CR2_FRXTH, 0);
+#endif
+
+  /* Enable spi */
+
+  spi_modifycr1(priv, SPI_CR1_SPE, 0);
+}
+
+
 /************************************************************************************
  * Public Functions
  ************************************************************************************/
@@ -2145,7 +2246,7 @@ FAR struct spi_dev_s *up_spiinitialize(int port)
 #endif
           /* Set up default configuration: Master, 8-bit, etc. */
 
-          spi_portinitialize(priv);
+          spi_portinitialize1(priv);
         }
     }
   else
