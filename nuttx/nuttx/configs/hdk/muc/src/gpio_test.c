@@ -18,13 +18,17 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <err.h>
+//#include <err.h>
 
-#include "epd.h"
-#include "gpio.h"
+#include <nuttx/gpio.h>
+
+
+//#include "epd.h"
+#include <arch/board/gpio_test.h>
+#include <arch/board/mods.h>
 
 // the platform specific I/O pins
-#include EPD_IO
+//#include EPD_IO
 
 
 // use redefine the EPD pins as LEDs
@@ -34,6 +38,9 @@
 #define LED_4_PIN    border_pin
 
 #define LED_PWM_PIN  pwm_pin
+
+#define GPIO_write(pin, value) gpio_set_value(pin, value)
+#define GPIO_pwm_write(pin, value) gpio_set_value(pin, value)
 
 
 
@@ -71,17 +78,18 @@ void scan_leds(void) {
 }
 
 
-int main(int argc, char *argv[]) {
+int gpio_test() {
 
+/*
 	if (!GPIO_setup()) {
 		err(1, "GPIO_setup failed");
 	}
-
-	GPIO_mode(LED_1_PIN, GPIO_OUTPUT);
-	GPIO_mode(LED_2_PIN, GPIO_OUTPUT);
-	GPIO_mode(LED_3_PIN, GPIO_OUTPUT);
-	GPIO_mode(LED_4_PIN, GPIO_OUTPUT);
-	GPIO_mode(LED_PWM_PIN, GPIO_PWM);
+*/
+	gpio_direction_out(LED_1_PIN, 1);
+	gpio_direction_out(LED_2_PIN, 1);
+	gpio_direction_out(LED_3_PIN, 1);
+	gpio_direction_out(LED_4_PIN, 1);
+	gpio_direction_out(LED_PWM_PIN, 1);
 
 	GPIO_write(LED_1_PIN, 0);
 	GPIO_write(LED_2_PIN, 0);
@@ -92,27 +100,13 @@ int main(int argc, char *argv[]) {
 
 	usleep(200000);
 
-#if EPD_PWM_REQUIRED
-	// test with pwm
-	for (int j = 0; j < 20; ++j) {
-		scan_leds();
-		for (int i = 0; i < 1024; ++i) {
-			GPIO_pwm_write(LED_PWM_PIN, i);
-			usleep(500);
-		}
-		for (int i = 1023; i >= 0; --i) {
-			GPIO_pwm_write(LED_PWM_PIN, i);
-			usleep(500);
-		}
-	}
-
-#else
+	int i;
 	// simple non-pwm test
-	for (int i = 0; i < 50; ++i) {
+	for (i = 0; i < 50; ++i) {
 		scan_leds();
 		usleep(200000);
 	}
-#endif
+
 
 	GPIO_pwm_write(LED_PWM_PIN, 0);
 
@@ -121,6 +115,6 @@ int main(int argc, char *argv[]) {
 	GPIO_write(LED_3_PIN, 0);
 	GPIO_write(LED_4_PIN, 0);
 
-	GPIO_teardown();
+//	GPIO_teardown();
 	return 0;
 }

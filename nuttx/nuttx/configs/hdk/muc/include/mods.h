@@ -128,6 +128,17 @@
 #define BATT_COMP_SPEED          STM32_COMP_SPEED_LOW    /* Speed */
 #define BATT_COMP_INV            false                   /* Output not inverted */
 
+/* epd GPIO definition */
+// see definition at http://developer.motorola.com/build/mdk-user-guide/hat-adapter-board
+#define panel_on_pin  CALC_GPIO_NUM('C',  7)  /* GPIO_P1_16 */
+#define border_pin    CALC_GPIO_NUM('A',  2)  /* GPIO_P1_08 */
+#define discharge_pin CALC_GPIO_NUM('A',  3)  /* GPIO_P1_10 */
+#define pwm_pin       CALC_GPIO_NUM('C',  14) /* GPIO_P1_12 */
+#define reset_pin     CALC_GPIO_NUM('C',  8)  /* GPIO_P1_18 */
+#define busy_pin      CALC_GPIO_NUM('D',  6)  /* GPIO_P1_22 */
+
+
+
 static inline void mods_rfr_init(void)
 {
     /* On this board, RFR is active high */

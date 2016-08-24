@@ -37,7 +37,7 @@
 #include <nuttx/arch.h>
 #include <nuttx/device.h>
 #include <nuttx/device_raw.h>
-//#include <arch/board/gpio_test.h>
+#include <arch/board/gpio_test.h>
 #include <arch/board/epd_test.h>
 //#include <nuttx/spi/spi.h>
 
@@ -84,6 +84,8 @@ static int mods_raw_recv(struct device *dev, uint32_t len, uint8_t data[])
       i++;
     }
 
+    // insert LED on the GPIOs to test if they are working
+    gpio_test();
     return 0;
 
     

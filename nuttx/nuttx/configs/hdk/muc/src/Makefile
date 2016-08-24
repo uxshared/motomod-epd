@@ -114,6 +114,8 @@ ifeq ($(CONFIG_BATTERY_MAX17050_THERMISTOR_ACCURATE_TEMP),y)
 CSRCS += stm32_thermistor.c
 endif
 
+CSRCS += gpio_test.c
+
 COBJS = $(CSRCS:.c=$(OBJEXT))
 
 SRCS = $(ASRCS) $(CSRCS)
