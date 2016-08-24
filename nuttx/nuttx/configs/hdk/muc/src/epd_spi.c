@@ -37,12 +37,14 @@ static void set_spi_mode(FAR struct spi_dev_s *spi, uint8_t mode);
 
 // enable SPI access SPI fd
 FAR struct spi_dev_s *spi_create(void) {
-	return up_spiinitialize(1);
+    return up_spiinitialize(1);
 }
 
 
 // release SPI fd (if open)
 bool SPI_destroy(FAR struct spi_dev_s *spi) {
+    
+    
 /*
 	if (NULL == spi) {
 		return false;
@@ -57,26 +59,39 @@ bool SPI_destroy(FAR struct spi_dev_s *spi) {
 // enable SPI, ensures a zero byte was sent (MOSI=0)
 // using SPI MODE 2 and that CS and clock remain high
 void SPI_on(FAR struct spi_dev_s *spi) {
-	const uint8_t buffer[1] = {0};
+	//const uint8_t buffer[1] = {0};
 
-#if EPD_COG_VERSION == 1
-	set_spi_mode(spi, SPIDEV_MODE2);
-#else
+    SPI_LOCK(spi, true);
+	//SPI_SETMODE(spi,SPIDEV_MODE0);
+	
+
 	set_spi_mode(spi, SPIDEV_MODE0);
-#endif
-	SPI_send(spi, buffer, sizeof(buffer));
+
+    SPI_SELECT(spi, SPIDEV_NONE, true);
+
+	SPI_SEND(spi, 0 & 0xff);
+
+	//SPI_SELECT(spi, SPIDEV_NONE, false);
+
+	//SPI_send(spi, buffer, sizeof(buffer));
 }
 
 
 // disable SPI, ensures a zero byte was sent (MOSI=0)
 // using SPI MODE 0 and that CS and clock remain low
 void SPI_off(FAR struct spi_dev_s *spi) {
-	const uint8_t buffer[1] = {0};
+	//const uint8_t buffer[1] = {0};
 
 	set_spi_mode(spi, SPIDEV_MODE0);
 	//set_spi_mode(spi, SPI_MODE_0);
+	//SPI_SELECT(spi, SPIDEV_NONE, true);
+
+	SPI_SEND(spi, 0 & 0xff);
 	
-	SPI_send(spi, buffer, sizeof(buffer));
+	//SPI_send(spi, buffer, sizeof(buffer));
+
+    SPI_SELECT(spi, SPIDEV_NONE, false);
+    //SPI_LOCK(spi, false);
 }
 
 // send a data block to SPI
@@ -97,8 +112,11 @@ void SPI_send(FAR struct spi_dev_s *spi, const void *buffer, size_t length) {
 	if (-1 == ioctl(spi->fd, SPI_IOC_MESSAGE(1), transfer_buffer)) {
 		warn("SPI: send failure");
 	}*/
+	//SPI_SELECT(spi, SPIDEV_NONE, true);
 
-	SPI_SNDBLOCK(spi,buffer,length);
+	SPI_SNDBLOCK(spi, buffer, length);
+	
+	//SPI_SELECT(spi, SPIDEV_NONE, false);
 }
 
 // send a data block to SPI and return last bytes returned by slave
@@ -137,9 +155,15 @@ static void set_spi_mode(FAR struct spi_dev_s *spi, uint8_t in_mode) {
 	//uint8_t lsb_first = 0;
 	//uint32_t speed_hz = spi->bps;
 
+        //uint32_t freq= 0;
+
+        
+
 	SPI_SETMODE(spi,in_mode);
 	SPI_SETBITS(spi,8);
 	SPI_SETFREQUENCY(spi,EPD_SPI_BPS);
+
+        //dbg("mode: %d freq: %d\n", in_mode, freq);
 
 	// WR
 	/*if (-1 == ioctl(spi->fd, SPI_IOC_WR_MODE, &mode)) {

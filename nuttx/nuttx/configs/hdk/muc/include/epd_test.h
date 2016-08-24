@@ -25,4 +25,6 @@
 // test epd panel function
 int epd_test(void);
 
+int spi_test(void);
+
 #endif

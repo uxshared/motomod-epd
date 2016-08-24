@@ -44,7 +44,7 @@ int epd_test(void) {
     // get spi devices
     spi = spi_create();
     if (spi != NULL) {
-        dbg("spi init %s", spi);
+        dbg("spi init %x\n", spi);
     } else {
         return -1;
     }
@@ -52,7 +52,7 @@ int epd_test(void) {
     gpio_direction_out(panel_on_pin, 1);
     gpio_direction_out(border_pin, 1);
     gpio_direction_out(discharge_pin, 1);
-    gpio_direction_out(reset_pin, 0);
+    gpio_direction_out(reset_pin, 1);
     gpio_direction_out(busy_pin, 0);
 
     EPD_type *epd = EPD_create(display_size,
@@ -64,17 +64,45 @@ int epd_test(void) {
                         spi);
 
     if (NULL == epd) {
-        dbg("EPD_setup failed");
+        dbg("EPD_setup failed\n");
         return -1;
-     }
+    }
+    dbg("epd created %x\n", epd);
+	
 
 	 // EPD display
     dbg("clear display\n");
     EPD_begin(epd);
+
+    
+    
+    dbg("begin stopped\n");
     EPD_clear(epd);
+    dbg("clear stopped\n");
     EPD_end(epd);
+    dbg("end stopped\n");
     EPD_destroy(epd);
+    dbg("destroy stopped\n");
     return rc;
+}
+
+int spi_test(void) {
+
+   FAR struct spi_dev_s *spi;
+
+   // get spi devices
+    spi = spi_create();
+    if (spi != NULL) {
+        dbg("spi init %s", spi);
+    } else {
+        return -1;
+    }
+
+    SPI_on(spi);    
+	
+
+   return 0;
+    
 }
 
 

@@ -294,11 +294,16 @@ void EPD_begin(EPD_type *epd) {
 	// assume OK
 	epd->status = EPD_OK;
 
+
+
 	// power up sequence
 	gpio_set_value(epd->EPD_Pin_RESET, LOW);
 	gpio_set_value(epd->EPD_Pin_PANEL_ON, LOW);
 	gpio_set_value(epd->EPD_Pin_DISCHARGE, LOW);
 	gpio_set_value(epd->EPD_Pin_BORDER, LOW);
+
+
+		
 
 	SPI_on(epd->spi);
 
@@ -316,6 +321,7 @@ void EPD_begin(EPD_type *epd) {
 	gpio_set_value(epd->EPD_Pin_RESET, HIGH);
 	Delay_ms(5);
 
+
 	// wait for COG to become ready
 	while (HIGH == gpio_get_value(epd->EPD_Pin_BUSY)) {
 		Delay_us(10);
@@ -323,29 +329,70 @@ void EPD_begin(EPD_type *epd) {
 
 	// read the COG ID
 	uint8_t receive_buffer[2];
+	int cog_id = receive_buffer[1];
+	// int cog_id = -1;
+	//SPI_SELECT(epd->spi, SPIDEV_NONE, true);
+	cog_id = SPI_SEND(epd->spi, 0x71 & 0xff);
+	cog_id = SPI_SEND(epd->spi, 0x00 & 0xff);
+	cog_id = SPI_SEND(epd->spi, 0x71 & 0xff);
+	cog_id = SPI_SEND(epd->spi, 0x00 & 0xff);
+	dbg ("COG ID - 00 %d... %d\n", cog_id,  0x0f & cog_id);
+	//SPI_SELECT(epd->spi, SPIDEV_NONE, false);
+
+	dbg("Enter loop!\n");
+    while(1) {
+        usleep(20000);
+	}
+	dbg("Exit loop!\n");
+
+/*
+	
 	SPI_read(epd->spi, CU8(0x71, 0x00), receive_buffer, sizeof(receive_buffer));
 	SPI_read(epd->spi, CU8(0x71, 0x00), receive_buffer, sizeof(receive_buffer));
 	int cog_id = receive_buffer[1];
-	if (0x02 != (0x0f & cog_id)) {
+*/	
+    //dbg ("COG ID!!!!!!!!!!!!!! %d...%d\n", cog_id, 0x0f & cog_id);
+	/*if (0x02 != (0x0f & cog_id)) {
 		epd->status = EPD_UNSUPPORTED_COG;
 		power_off(epd);
 		return;
-	}
+	}*/
+
+
 
 	// Disable OE
-	SPI_send(epd->spi, CU8(0x70, 0x02), 2);
-	SPI_send(epd->spi, CU8(0x72, 0x40), 2);
+    //SPI_send(epd->spi, CU8(0x70, 0x02), 2);
+	//SPI_send(epd->spi, CU8(0x72, 0x40), 2);
+	SPI_SELECT(epd->spi, SPIDEV_NONE, true);
+	SPI_SEND(epd->spi, 0x70 & 0xff);
+	SPI_SEND(epd->spi, 0x02 & 0xff);
+	SPI_SEND(epd->spi, 0x72 & 0xff);
+	SPI_SEND(epd->spi, 0x40 & 0xff);
+	SPI_SELECT(epd->spi, SPIDEV_NONE, false);
+	
 
 	// check breakage
-	SPI_send(epd->spi, CU8(0x70, 0x0f), 2);
-	SPI_read(epd->spi, CU8(0x73, 0x00), receive_buffer, sizeof(receive_buffer));
+	//SPI_send(epd->spi, CU8(0x70, 0x0f), 2);
+	//SPI_read(epd->spi, CU8(0x73, 0x00), receive_buffer, sizeof(receive_buffer));
+	SPI_SELECT(epd->spi, SPIDEV_NONE, true);
 	int broken_panel = receive_buffer[1];
+    SPI_SEND(epd->spi, 0x70 & 0xff);
+	SPI_SEND(epd->spi, 0x0f & 0xff);	
+    broken_panel = SPI_SEND(epd->spi, 0x73 & 0xff);	
+    //dbg ("broken_panel!!!!!!!!!!!!!! %d...%d\n", broken_panel, 0x80 & broken_panel);
+	broken_panel = SPI_SEND(epd->spi, 0x00 & 0xff);			
+	dbg ("broken_panel!!!!!!!!!!!!!! %d...%d\n", broken_panel, 0x80 & broken_panel);
+	SPI_SELECT(epd->spi, SPIDEV_NONE, false);
+
+
+
+/*	
 	if (0x00 == (0x80 & broken_panel)) {
 		epd->status = EPD_PANEL_BROKEN;
 		power_off(epd);
 		return;
 	}
-
+*/
 	// power saving mode
 	SPI_send(epd->spi, CU8(0x70, 0x0b), 2);
 	SPI_send(epd->spi, CU8(0x72, 0x02), 2);
@@ -404,8 +451,13 @@ void EPD_begin(EPD_type *epd) {
 
 		// check DC/DC
 		SPI_send(epd->spi, CU8(0x70, 0x0f), 2);
-		SPI_read(epd->spi, CU8(0x73, 0x00), receive_buffer, sizeof(receive_buffer));
 		int dc_state = receive_buffer[1];
+		SPI_SELECT(epd->spi, SPIDEV_NONE, true);
+        dc_state = SPI_SEND(epd->spi, 0x73 & 0xff);	
+		dc_state = SPI_SEND(epd->spi, 0x00 & 0xff);		
+		dbg("DC STATE %d\n", 0x40 & dc_state);
+		SPI_SELECT(epd->spi, SPIDEV_NONE, false);
+		//SPI_read(epd->spi, CU8(0x73, 0x00), receive_buffer, sizeof(receive_buffer));		
 		if (0x40 == (0x40 & dc_state)) {
 			dc_ok = true;
 			break;
@@ -413,8 +465,9 @@ void EPD_begin(EPD_type *epd) {
 	}
 	if (!dc_ok) {
 		epd->status = EPD_DC_FAILED;
-		power_off(epd);
-		return;
+		dbg("EPD DC FAILED");
+		//power_off(epd);
+		//return;
 	}
 
 	// output enable to disable
@@ -852,5 +905,5 @@ static void one_line(EPD_type *epd, uint16_t line, const uint8_t *data, uint8_t 
 	SPI_send(epd->spi, CU8(0x72, 0x07), 2);
 
 	//Delay_ms(1);
-	SPI_off(epd->spi);
+	SPI_off(epd->spi);	
 }
