@@ -15,7 +15,8 @@
 #if !defined(EPD_H)
 #define EPD_H 1
 
-#include "spi.h"
+#include <nuttx/spi/spi.h>
+
 
 // compile-time #if configuration
 #define EPD_CHIP_VERSION      2
@@ -62,7 +63,7 @@ EPD_type *EPD_create(EPD_size size,
 		     int discharge_pin,
 		     int reset_pin,
 		     int busy_pin,
-		     SPI_type *spi);
+		     FAR struct spi_dev_s *spi);
 
 // release memory
 void EPD_destroy(EPD_type *epd);

@@ -19,66 +19,50 @@
 #include <stdlib.h>
 #include <fcntl.h>
 #include <unistd.h>
-#include <err.h>
+//#include <err.h>
 #include <sys/ioctl.h>
-#include <linux/spi/spidev.h>
+//#include <linux/spi/spidev.h>
 
-#include "spi.h"
+#include <arch/board/epd_spi.h>
 
 
-// spi information
-struct SPI_struct {
-	int fd;
-	uint32_t bps;
-};
+#define EPD_COG_VERSION 2
+
 
 
 // prototypes
-static void set_spi_mode(SPI_type *spi, uint8_t mode);
+static void set_spi_mode(FAR struct spi_dev_s *spi, uint8_t mode);
+
 
 
 // enable SPI access SPI fd
-SPI_type *SPI_create(const char *spi_path, uint32_t bps) {
-
-	// allocate memory
-	SPI_type *spi = malloc(sizeof(SPI_type));
-	if (NULL == spi) {
-		warn("falled to allocate SPI structure");
-		return NULL;
-	}
-	spi->fd = open(spi_path, O_RDWR);
-	if (spi->fd < 0) {
-		free(spi);
-		warn("cannot open: %s", spi_path);
-		return NULL;
-	}
-
-	spi->bps = bps;
-
-	return spi;
+FAR struct spi_dev_s *spi_create(void) {
+	return up_spiinitialize(1);
 }
 
 
 // release SPI fd (if open)
-bool SPI_destroy(SPI_type *spi) {
+bool SPI_destroy(FAR struct spi_dev_s *spi) {
+/*
 	if (NULL == spi) {
 		return false;
 	}
 	close(spi->fd);
 	free(spi);
+*/
 	return true;
 }
 
 
 // enable SPI, ensures a zero byte was sent (MOSI=0)
 // using SPI MODE 2 and that CS and clock remain high
-void SPI_on(SPI_type *spi) {
+void SPI_on(FAR struct spi_dev_s *spi) {
 	const uint8_t buffer[1] = {0};
 
 #if EPD_COG_VERSION == 1
-	set_spi_mode(spi, SPI_MODE_2);
+	set_spi_mode(spi, SPIDEV_MODE2);
 #else
-	set_spi_mode(spi, SPI_MODE_0);
+	set_spi_mode(spi, SPIDEV_MODE0);
 #endif
 	SPI_send(spi, buffer, sizeof(buffer));
 }
@@ -86,17 +70,19 @@ void SPI_on(SPI_type *spi) {
 
 // disable SPI, ensures a zero byte was sent (MOSI=0)
 // using SPI MODE 0 and that CS and clock remain low
-void SPI_off(SPI_type *spi) {
+void SPI_off(FAR struct spi_dev_s *spi) {
 	const uint8_t buffer[1] = {0};
 
-	set_spi_mode(spi, SPI_MODE_0);
+	set_spi_mode(spi, SPIDEV_MODE0);
+	//set_spi_mode(spi, SPI_MODE_0);
+	
 	SPI_send(spi, buffer, sizeof(buffer));
 }
 
 // send a data block to SPI
 // will only change CS if the SPI_CS bits are set
-void SPI_send(SPI_type *spi, const void *buffer, size_t length) {
-	struct spi_ioc_transfer transfer_buffer[1] = {
+void SPI_send(FAR struct spi_dev_s *spi, const void *buffer, size_t length) {
+	/*struct spi_ioc_transfer transfer_buffer[1] = {
 		{
 			.tx_buf = (unsigned long)(buffer),
 			.rx_buf = 0,  // nothing to receive
@@ -110,12 +96,17 @@ void SPI_send(SPI_type *spi, const void *buffer, size_t length) {
 
 	if (-1 == ioctl(spi->fd, SPI_IOC_MESSAGE(1), transfer_buffer)) {
 		warn("SPI: send failure");
-	}
+	}*/
+
+	SPI_SNDBLOCK(spi,buffer,length);
 }
 
 // send a data block to SPI and return last bytes returned by slave
 // will only change CS if the SPI_CS bits are set
-void SPI_read(SPI_type *spi, const void *buffer, void *received, size_t length) {
+void SPI_read(FAR struct spi_dev_s *spi, const void *buffer, void *received, size_t length) {
+    SPI_EXCHANGE(spi, buffer, received, length);
+
+/*
 	struct spi_ioc_transfer transfer_buffer[1] = {
 		{
 			.tx_buf = (unsigned long)(buffer),
@@ -131,21 +122,27 @@ void SPI_read(SPI_type *spi, const void *buffer, void *received, size_t length) 
 	if (-1 == ioctl(spi->fd, SPI_IOC_MESSAGE(1), transfer_buffer)) {
 		warn("SPI: read failure");
 	}
+
+	*/
 }
 
 
 // internal functions
 // ==================
 
-static void set_spi_mode(SPI_type *spi, uint8_t in_mode) {
+static void set_spi_mode(FAR struct spi_dev_s *spi, uint8_t in_mode) {
 
-	uint8_t mode = in_mode;
-	uint8_t bits = 8;
-	uint8_t lsb_first = 0;
-	uint32_t speed_hz = spi->bps;
+	//uint8_t mode = in_mode;
+	//uint8_t bits = 8;
+	//uint8_t lsb_first = 0;
+	//uint32_t speed_hz = spi->bps;
+
+	SPI_SETMODE(spi,in_mode);
+	SPI_SETBITS(spi,8);
+	SPI_SETFREQUENCY(spi,EPD_SPI_BPS);
 
 	// WR
-	if (-1 == ioctl(spi->fd, SPI_IOC_WR_MODE, &mode)) {
+	/*if (-1 == ioctl(spi->fd, SPI_IOC_WR_MODE, &mode)) {
 		err(1,"SPI: cannot set SPI_IOC_WR_MODE  =%d", mode);
 	}
 
@@ -159,5 +156,5 @@ static void set_spi_mode(SPI_type *spi, uint8_t in_mode) {
 
 	if (-1 == ioctl(spi->fd, SPI_IOC_WR_MAX_SPEED_HZ, &speed_hz)) {
 		err(1,"SPI: cannot set SPI_IOC_WR_MAX_SPEED_HZ = %d", speed_hz);
-	}
+	} */
 }

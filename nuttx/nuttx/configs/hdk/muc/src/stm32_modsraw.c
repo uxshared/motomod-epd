@@ -86,6 +86,9 @@ static int mods_raw_recv(struct device *dev, uint32_t len, uint8_t data[])
 
     // insert LED on the GPIOs to test if they are working
     gpio_test();
+
+    // add the epd test to try to clear the display
+    epd_test();
     return 0;
 
     

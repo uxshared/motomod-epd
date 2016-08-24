@@ -16,24 +16,31 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <unistd.h>
-#include <memory.h>
+//#include <memory.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <err.h>
+//#include <err.h>
 #include <time.h>
 #include <signal.h>
 
-#include "gpio.h"
-#include "spi.h"
-#include "epd.h"
+#include <string.h>
+
+//#include "spi.h"
+
+#include <nuttx/gpio.h>
+
+#include <arch/board/epd.h>
+#include <arch/board/epd_spi.h>
+
+
 
 // delays - more consistent naming
 #define Delay_ms(ms) usleep(1000 * (ms))
 #define Delay_us(us) usleep(us)
 #define LOW 0
 #define HIGH 1
-#define digitalRead(pin) GPIO_read(pin)
-#define digitalWrite(pin, value) GPIO_write(pin, value)
+#define digitalRead(pin) gpio_get_value(pin)
+#define digitalWrite(pin, value) gpio_set_value(pin, value)
 
 // values for border byte
 #define BORDER_BYTE_BLACK 0xff
@@ -103,7 +110,7 @@ struct EPD_struct {
 	size_t line_buffer_size;
 
 	timer_t timer;
-	SPI_type *spi;
+	FAR struct spi_dev_s *spi; /* SPI port bound to this slot */
 
 	bool COG_on;
 };
@@ -115,7 +122,7 @@ EPD_type *EPD_create(EPD_size size,
 		     int discharge_pin,
 		     int reset_pin,
 		     int busy_pin,
-		     SPI_type *spi) {
+		     FAR struct spi_dev_s *spi) {
 
 	// create a polled timer
 	timer_t timer;
@@ -123,14 +130,14 @@ EPD_type *EPD_create(EPD_size size,
 	event.sigev_notify = SIGEV_NONE;
 
 	if (-1 == timer_create(CLOCK_REALTIME, &event, &timer)) {
-		warn("falled to create timer");
+		dbg("falled to create timer");
 		return NULL;
 	}
 
 	// allocate memory
 	EPD_type *epd = malloc(sizeof(EPD_type));
 	if (NULL == epd) {
-		warn("falled to allocate EPD structure");
+		dbg("falled to allocate EPD structure");
 		return NULL;
 	}
 
@@ -241,7 +248,7 @@ EPD_type *EPD_create(EPD_size size,
 	epd->line_buffer = malloc(epd->line_buffer_size + 4096);
 	if (NULL == epd->line_buffer) {
 		free(epd);
-		warn("falled to allocate EPD line buffer");
+		dbg("falled to allocate EPD line buffer");
 		return NULL;
 	}
 
@@ -288,29 +295,29 @@ void EPD_begin(EPD_type *epd) {
 	epd->status = EPD_OK;
 
 	// power up sequence
-	digitalWrite(epd->EPD_Pin_RESET, LOW);
-	digitalWrite(epd->EPD_Pin_PANEL_ON, LOW);
-	digitalWrite(epd->EPD_Pin_DISCHARGE, LOW);
-	digitalWrite(epd->EPD_Pin_BORDER, LOW);
+	gpio_set_value(epd->EPD_Pin_RESET, LOW);
+	gpio_set_value(epd->EPD_Pin_PANEL_ON, LOW);
+	gpio_set_value(epd->EPD_Pin_DISCHARGE, LOW);
+	gpio_set_value(epd->EPD_Pin_BORDER, LOW);
 
 	SPI_on(epd->spi);
 
 	Delay_ms(5);
-	digitalWrite(epd->EPD_Pin_PANEL_ON, HIGH);
+	gpio_set_value(epd->EPD_Pin_PANEL_ON, HIGH);
 	Delay_ms(10);
 
-	digitalWrite(epd->EPD_Pin_RESET, HIGH);
-	digitalWrite(epd->EPD_Pin_BORDER, HIGH);
+	gpio_set_value(epd->EPD_Pin_RESET, HIGH);
+	gpio_set_value(epd->EPD_Pin_BORDER, HIGH);
 	Delay_ms(5);
 
-	digitalWrite(epd->EPD_Pin_RESET, LOW);
+	gpio_set_value(epd->EPD_Pin_RESET, LOW);
 	Delay_ms(5);
 
-	digitalWrite(epd->EPD_Pin_RESET, HIGH);
+	gpio_set_value(epd->EPD_Pin_RESET, HIGH);
 	Delay_ms(5);
 
 	// wait for COG to become ready
-	while (HIGH == digitalRead(epd->EPD_Pin_BUSY)) {
+	while (HIGH == gpio_get_value(epd->EPD_Pin_BUSY)) {
 		Delay_us(10);
 	}
 
@@ -375,7 +382,8 @@ void EPD_begin(EPD_type *epd) {
 
 	bool dc_ok = false;
 
-	for (int i = 0; i < 4; ++i) {
+    int i;
+	for (i = 0; i < 4; ++i) {
 		// charge pump positive voltage on - VGH/VDL on
 		SPI_send(epd->spi, CU8(0x70, 0x05), 2);
 		SPI_send(epd->spi, CU8(0x72, 0x01), 2);
@@ -474,16 +482,16 @@ void EPD_end(EPD_type *epd) {
 static void power_off(EPD_type *epd) {
 
 	// turn of power and all signals
-	digitalWrite(epd->EPD_Pin_RESET, LOW);
-	digitalWrite(epd->EPD_Pin_PANEL_ON, LOW);
-	digitalWrite(epd->EPD_Pin_BORDER, LOW);
+	gpio_set_value(epd->EPD_Pin_RESET, LOW);
+	gpio_set_value(epd->EPD_Pin_PANEL_ON, LOW);
+	gpio_set_value(epd->EPD_Pin_BORDER, LOW);
 
 	// ensure SPI MOSI and CLOCK are Low before CS Low
 	SPI_off(epd->spi);
 
-	digitalWrite(epd->EPD_Pin_DISCHARGE, HIGH);
+	gpio_set_value(epd->EPD_Pin_DISCHARGE, HIGH);
 	Delay_ms(150);
-	digitalWrite(epd->EPD_Pin_DISCHARGE, LOW);
+	gpio_set_value(epd->EPD_Pin_DISCHARGE, LOW);
 }
 
 
@@ -558,19 +566,21 @@ static int temperature_to_factor_10x(int temperature) {
 // so smallest would have 96 * 32 bytes
 
 static void frame_fixed(EPD_type *epd, uint8_t fixed_value, EPD_stage stage) {
-	for (uint8_t l = 0; l < epd->lines_per_display ; ++l) {
+    uint8_t l;
+	for (l = 0; l < epd->lines_per_display ; ++l) {
 		one_line(epd, l, NULL, fixed_value, NULL, stage);
 	}
 }
 
 
 static void frame_data(EPD_type *epd, const uint8_t *image, const uint8_t *mask, EPD_stage stage) {
+    uint8_t l;
 	if (NULL == mask) {
-		for (uint8_t l = 0; l < epd->lines_per_display ; ++l) {
+		for (l = 0; l < epd->lines_per_display ; ++l) {
 			one_line(epd, l, &image[l * epd->bytes_per_line], 0, NULL, stage);
 		}
 	} else {
-		for (uint8_t l = 0; l < epd->lines_per_display ; ++l) {
+		for (l = 0; l < epd->lines_per_display ; ++l) {
 			size_t n = l * epd->bytes_per_line;
 			one_line(epd, l, &image[n], 0, &mask[n], stage);
 		}
@@ -586,13 +596,13 @@ static void frame_fixed_repeat(EPD_type *epd, uint8_t fixed_value, EPD_stage sta
 	its.it_interval.tv_nsec = 0;
 
 	if (-1 == timer_settime(epd->timer, 0, &its, NULL)) {
-		err(1, "timer_settime failed");
+		dbg("timer_settime failed");
 	}
 	do {
 		frame_fixed(epd, fixed_value, stage);
 
 		if (-1 == timer_gettime(epd->timer, &its)) {
-			err(1, "timer_gettime failed");
+			dbg("timer_gettime failed");
 		}
 	} while (its.it_value.tv_sec > 0 || its.it_value.tv_nsec > 0);
 }
@@ -607,12 +617,12 @@ static void frame_data_repeat(EPD_type *epd, const uint8_t *image, const uint8_t
 
 	int n = 0;
 	if (-1 == timer_settime(epd->timer, 0, &its, NULL)) {
-		err(1, "timer_settime failed");
+		dbg("timer_settime failed");
 	}
 	do {
 		frame_data(epd, image, mask, stage);
 		if (-1 == timer_gettime(epd->timer, &its)) {
-			err(1, "timer_gettime failed");
+			dbg("timer_gettime failed");
 		}
 		++n;
 	} while (its.it_value.tv_sec > 0 || its.it_value.tv_nsec > 0);
@@ -621,7 +631,8 @@ static void frame_data_repeat(EPD_type *epd, const uint8_t *image, const uint8_t
 
 
 static void nothing_frame(EPD_type *epd) {
-	for (int line = 0; line < epd->lines_per_display; ++line) {
+    int line;
+	for (line = 0; line < epd->lines_per_display; ++line) {
 		one_line(epd, 0x7fffu, NULL, 0x00, NULL, EPD_compensate);
 	}
 }
@@ -639,8 +650,8 @@ static void border_dummy_line(EPD_type *epd) {
 
 // pixels on display are numbered from 1 so even is actually bits 1,3,5,...
 static void even_pixels(EPD_type *epd, uint8_t **pp, const uint8_t *data, uint8_t fixed_value, const uint8_t *mask, EPD_stage stage) {
-
-	for (uint16_t b = 0; b < epd->bytes_per_line; ++b) {
+    uint16_t b;
+	for (b = 0; b < epd->bytes_per_line; ++b) {
 		if (NULL != data) {
 			uint8_t pixels = data[b] & 0xaa;
 			uint8_t pixel_mask = 0xff;
@@ -677,7 +688,8 @@ static void even_pixels(EPD_type *epd, uint8_t **pp, const uint8_t *data, uint8_
 
 // pixels on display are numbered from 1 so odd is actually bits 0,2,4,...
 static void odd_pixels(EPD_type *epd, uint8_t **pp, const uint8_t *data, uint8_t fixed_value, const uint8_t *mask, EPD_stage stage) {
-	for (uint16_t b = epd->bytes_per_line; b > 0; --b) {
+    uint16_t b;
+	for (b = epd->bytes_per_line; b > 0; --b) {
 		if (NULL != data) {
 			uint8_t pixels = data[b - 1] & 0x55;
 			uint8_t pixel_mask = 0xff;
@@ -717,15 +729,16 @@ static inline uint16_t interleave_bits(uint16_t value) {
 
 // pixels on display are numbered from 1
 static void all_pixels(EPD_type *epd, uint8_t **pp, const uint8_t *data, uint8_t fixed_value, const uint8_t *mask, EPD_stage stage) {
-	for (uint16_t b = epd->bytes_per_line; b > 0; --b) {
+    uint16_t b;
+	for (b = epd->bytes_per_line; b > 0; --b) {
 		if (NULL != data) {
 			uint16_t pixels = interleave_bits(data[b - 1]);
 
 			uint16_t pixel_mask = 0xffff;
 			if (NULL != mask) {
-				uint16_t pixel_mask = interleave_bits(mask[b - 1]);
-				pixel_mask = (pixel_mask ^ pixels) & 0x5555;
-				pixel_mask |= pixel_mask << 1;
+				uint16_t pixel_mask_inside = interleave_bits(mask[b - 1]);
+				pixel_mask_inside = (pixel_mask_inside ^ pixels) & 0x5555;
+				pixel_mask_inside |= pixel_mask_inside << 1;
 			}
 			switch(stage) {
 			case EPD_compensate:  // B -> W, W -> B (Current Image)
@@ -768,12 +781,14 @@ static void one_line(EPD_type *epd, uint16_t line, const uint8_t *data, uint8_t 
 		*p++ = 0x00;
 	}
 
+	uint16_t b;
+
 	if (epd->middle_scan) {
 		// data bytes
 		odd_pixels(epd, &p, data, fixed_value, mask, stage);
 
 		// scan line
-		for (uint16_t b = epd->bytes_per_scan; b > 0; --b) {
+		for (b = epd->bytes_per_scan; b > 0; --b) {
 			if (line / 4 == b - 1) {
 				*p++ = 0x03 << (2 * (line & 0x03));
 			} else {
@@ -786,7 +801,7 @@ static void one_line(EPD_type *epd, uint16_t line, const uint8_t *data, uint8_t 
 
 	} else {
 		// even scan line, but as lines on display are numbered from 1, line: 1,3,5,...
-		for (uint16_t b = 0; b < epd->bytes_per_scan; ++b) {
+		for (b = 0; b < epd->bytes_per_scan; ++b) {
 			if (0 != (line & 0x01) && line / 8 == b) {
 				*p++ = 0xc0 >> (line & 0x06);
 			} else {
@@ -798,7 +813,7 @@ static void one_line(EPD_type *epd, uint16_t line, const uint8_t *data, uint8_t 
 		all_pixels(epd, &p, data, fixed_value, mask, stage);
 
 		// odd scan line, but as lines on display are numbered from 1, line: 0,2,4,6,...
-		for (uint16_t b = epd->bytes_per_scan; b > 0; --b) {
+		for (b = epd->bytes_per_scan; b > 0; --b) {
 			if (0 == (line & 0x01) && line / 8 == b - 1) {
 				*p++ = 0x03 << (line & 0x06);
 			} else {

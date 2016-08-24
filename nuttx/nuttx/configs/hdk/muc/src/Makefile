@@ -115,6 +115,9 @@ CSRCS += stm32_thermistor.c
 endif
 
 CSRCS += gpio_test.c
+CSRCS += epd_spi.c
+CSRCS += epd.c
+CSRCS += epd_test.c
 
 COBJS = $(CSRCS:.c=$(OBJEXT))
 

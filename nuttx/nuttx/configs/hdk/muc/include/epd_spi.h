@@ -13,41 +13,44 @@
 // governing permissions and limitations under the License.
 
 
-#if !defined(SPI_H)
-#define SPI_H 1
+#if !defined(EPD_SPI_H)
+#define EPD_SPI_H 1
 
 #include <stdint.h>
 #include <stdbool.h>
 #include <unistd.h>
 
+#include <nuttx/spi/spi.h>
+
+#define EPD_SPI_BPS     800000
 
 // type to hold SPI data
-typedef struct SPI_struct SPI_type;
+//typedef struct SPI_struct SPI_type;
 
 
 // functions
 // =========
 
 // enable SPI access SPI fd
-SPI_type *SPI_create(const char *spi_path, uint32_t bps);
+FAR struct spi_dev_s *spi_create();
 
 // release SPI fd
-bool SPI_destroy(SPI_type *spi);
+bool SPI_destroy(FAR struct spi_dev_s *spi);
 
 // enable SPI, ensures a zero byte was sent (MOSI=0)
 // using SPI MODE 2 and that CS and clock remain high
-void SPI_on(SPI_type *spi);
+void SPI_on(FAR struct spi_dev_s *spi);
 
 // disable SPI, ensures a zero byte was sent (MOSI=0)
 // using SPI MODE 0 and that CS and clock remain low
-void SPI_off(SPI_type *spi);
+void SPI_off(FAR struct spi_dev_s *spi);
 
 // send a data block to SPI
 // will only change CS if the SPI_CS bits are set
-void SPI_send(SPI_type *spi, const void *buffer, size_t length);
+void SPI_send(FAR struct spi_dev_s *spi, const void *buffer, size_t length);
 
 // send a data block to SPI and return last bytes returned by slave
 // will only change CS if the SPI_CS bits are set
-void SPI_read(SPI_type *spi, const void *buffer, void *received, size_t length);
+void SPI_read(FAR struct spi_dev_s *spi, const void *buffer, void *received, size_t length);
 
 #endif
